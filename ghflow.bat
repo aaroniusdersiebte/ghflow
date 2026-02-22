@@ -53,8 +53,10 @@ echo   2) Commit + Push
 echo   3) Pull
 echo   4) Branch wechseln / neu
 echo   5) Vollsync (alles stagen + pushen)
-echo   6) .gitignore erstellen
-echo   7) Beenden
+echo   6) Datei aus Tracking entfernen (untrack)
+echo   7) Datei aus gesamter History loeschen
+echo   8) .gitignore erstellen
+echo   9) Beenden
 echo.
 set /p CHOICE="Auswahl: "
 
@@ -63,8 +65,10 @@ if "!CHOICE!"=="2" goto COMMIT_PUSH
 if "!CHOICE!"=="3" goto PULL
 if "!CHOICE!"=="4" goto BRANCH
 if "!CHOICE!"=="5" goto FULLSYNC
-if "!CHOICE!"=="6" goto GITIGNORE
-if "!CHOICE!"=="7" goto END
+if "!CHOICE!"=="6" goto UNTRACK
+if "!CHOICE!"=="7" goto PURGE_HISTORY
+if "!CHOICE!"=="8" goto GITIGNORE
+if "!CHOICE!"=="9" goto END
 
 echo [!] Ungueltige Auswahl.
 echo.
@@ -286,6 +290,94 @@ if errorlevel 1 (
     )
 ) else (
     echo [OK] Vollsync abgeschlossen!
+)
+echo.
+goto REFRESH
+
+:: --------------------------------------------------------
+:PURGE_HISTORY
+echo.
+echo ---- Datei aus gesamter History loeschen ------------------
+echo.
+echo   WARNUNG: Diese Aktion schreibt die komplette git-History
+echo   neu und erfordert danach einen force-push. Nicht rueckgaengig!
+echo   Wichtig: Token vorher in Discord Developer Portal invalidieren.
+echo.
+set /p PFILE="   Dateiname (z.B. .env): "
+if "!PFILE!"=="" (
+    echo [!] Kein Dateiname - Abbruch.
+    echo.
+    goto MENU
+)
+set /p PCONFIRM="   Sicher? History wird neu geschrieben. [ja/n]: "
+if /i not "!PCONFIRM!"=="ja" (
+    echo Abbruch.
+    goto MENU
+)
+echo.
+echo [**] Entferne !PFILE! aus der gesamten History...
+git filter-branch --force --index-filter "git rm --cached --ignore-unmatch !PFILE!" --prune-empty --tag-name-filter cat -- --all
+if errorlevel 1 (
+    echo [FEHLER] filter-branch fehlgeschlagen.
+    echo.
+    goto MENU
+)
+echo [OK] History bereinigt.
+echo.
+set /p PFPUSH="   Force-Push zu origin? [j/n]: "
+if /i "!PFPUSH!"=="j" (
+    set PHB=main
+    for /f "delims=" %%b in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set PHB=%%b
+    git push origin "!PHB!" --force
+    if errorlevel 1 (
+        echo [FEHLER] Force-Push fehlgeschlagen.
+    ) else (
+        echo [OK] History auf GitHub aktualisiert. Datei ist entfernt.
+    )
+)
+echo.
+goto REFRESH
+
+:: --------------------------------------------------------
+:UNTRACK
+echo.
+echo ---- Datei aus Tracking entfernen -------------------------
+echo.
+echo   Tracked Dateien (Auswahl):
+git ls-files --cached
+echo.
+echo   HINWEIS: Die Datei bleibt lokal erhalten, wird aber
+echo   nicht mehr von git verfolgt. Danach committen + pushen.
+echo.
+set /p UFILE="   Dateiname (z.B. .env): "
+if "!UFILE!"=="" (
+    echo [!] Kein Dateiname - Abbruch.
+    echo.
+    goto MENU
+)
+git ls-files --cached "!UFILE!" | find /c /v "" > nul 2>&1
+git rm --cached "!UFILE!" 2>nul
+if errorlevel 1 (
+    echo [FEHLER] Datei nicht im Tracking gefunden: !UFILE!
+) else (
+    echo [OK] !UFILE! wird nicht mehr getrackt.
+    echo [!] Jetzt committen und pushen um die Aenderung zu speichern.
+    set /p DOCOMMIT="    Direkt committen + pushen? [j/n]: "
+    if /i "!DOCOMMIT!"=="j" (
+        git commit -m "untrack !UFILE!"
+        if errorlevel 1 (
+            echo [FEHLER] Commit fehlgeschlagen.
+        ) else (
+            set UTB=main
+            for /f "delims=" %%b in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set UTB=%%b
+            git push --set-upstream origin "!UTB!"
+            if errorlevel 1 (
+                echo [FEHLER] Push fehlgeschlagen.
+            ) else (
+                echo [OK] Fertig - !UFILE! ist nicht mehr im Repo.
+            )
+        )
+    )
 )
 echo.
 goto REFRESH
