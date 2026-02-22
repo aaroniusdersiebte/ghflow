@@ -1,0 +1,1 @@
+Github flow, ein tool für newbies das einem simpel unterstützt sein github repo zu managen. Möglich ist Init, Status, Comit + Push, Pull, Branch wechseln / neu, gitignore erstellen
