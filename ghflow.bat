@@ -52,8 +52,9 @@ echo   1) Status anzeigen
 echo   2) Commit + Push
 echo   3) Pull
 echo   4) Branch wechseln / neu
-echo   5) .gitignore erstellen
-echo   6) Beenden
+echo   5) Vollsync (alles stagen + pushen)
+echo   6) .gitignore erstellen
+echo   7) Beenden
 echo.
 set /p CHOICE="Auswahl: "
 
@@ -61,8 +62,9 @@ if "!CHOICE!"=="1" goto STATUS
 if "!CHOICE!"=="2" goto COMMIT_PUSH
 if "!CHOICE!"=="3" goto PULL
 if "!CHOICE!"=="4" goto BRANCH
-if "!CHOICE!"=="5" goto GITIGNORE
-if "!CHOICE!"=="6" goto END
+if "!CHOICE!"=="5" goto FULLSYNC
+if "!CHOICE!"=="6" goto GITIGNORE
+if "!CHOICE!"=="7" goto END
 
 echo [!] Ungueltige Auswahl.
 echo.
@@ -96,8 +98,9 @@ echo.
 set CP_CHANGES=0
 for /f %%c in ('git status --short 2^>nul ^| find /c /v ""') do set CP_CHANGES=%%c
 if "!CP_CHANGES!"=="0" (
-    echo [!] Keine Aenderungen vorhanden.
-    echo.
+    echo [!] Keine uncommitted Aenderungen.
+    set /p PUSHONLY="    Trotzdem pushen (z.B. neuer Branch)? [j/n]: "
+    if /i "!PUSHONLY!"=="j" goto DO_PUSH
     goto MENU
 )
 
@@ -118,12 +121,8 @@ if "!STAGED!"=="0" (
     goto MENU
 )
 
-set /p MSG="Commit-Nachricht: "
-if "!MSG!"=="" (
-    echo [!] Leere Nachricht - Abbruch.
-    echo.
-    goto MENU
-)
+set /p MSG="Commit-Nachricht (leer = 'update'): "
+if "!MSG!"=="" set MSG=update
 
 git commit -m "!MSG!"
 if errorlevel 1 (
@@ -133,10 +132,11 @@ if errorlevel 1 (
 )
 echo [OK] Commit erstellt.
 
+:DO_PUSH
 set PB=main
 for /f "delims=" %%b in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set PB=%%b
 echo [**] Push zu origin/!PB!...
-git push origin "!PB!"
+git push --set-upstream origin "!PB!"
 if errorlevel 1 (
     echo [FEHLER] Push fehlgeschlagen. Remote und Zugangsdaten pruefen.
 ) else (
@@ -189,6 +189,50 @@ if "!BACTION!"=="2" (
     ) else (
         echo [OK] Branch erstellt: !BNAME!
     )
+)
+echo.
+goto REFRESH
+
+:: --------------------------------------------------------
+:FULLSYNC
+echo.
+echo ---- Vollsync (alles stagen + pushen) ---------------------
+echo.
+git add -A
+echo [OK] Alle Dateien gestaged (.gitignore wird respektiert).
+echo.
+git status --short
+echo.
+
+set FS_STAGED=0
+for /f %%s in ('git diff --cached --name-only 2^>nul ^| find /c /v ""') do set FS_STAGED=%%s
+if "!FS_STAGED!"=="0" (
+    echo [!] Nichts zu committen - alles bereits aktuell.
+    set /p FPUSH="    Branch trotzdem pushen? [j/n]: "
+    if /i "!FPUSH!"=="j" goto FS_PUSH
+    goto MENU
+)
+
+set /p FMSG="Commit-Nachricht (leer = 'sync'): "
+if "!FMSG!"=="" set FMSG=sync
+
+git commit -m "!FMSG!"
+if errorlevel 1 (
+    echo [FEHLER] Commit fehlgeschlagen.
+    echo.
+    goto MENU
+)
+echo [OK] Commit erstellt.
+
+:FS_PUSH
+set FSB=main
+for /f "delims=" %%b in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set FSB=%%b
+echo [**] Push zu origin/!FSB!...
+git push --set-upstream origin "!FSB!"
+if errorlevel 1 (
+    echo [FEHLER] Push fehlgeschlagen.
+) else (
+    echo [OK] Vollsync abgeschlossen!
 )
 echo.
 goto REFRESH
