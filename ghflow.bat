@@ -138,7 +138,21 @@ for /f "delims=" %%b in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set PB=%%b
 echo [**] Push zu origin/!PB!...
 git push --set-upstream origin "!PB!"
 if errorlevel 1 (
-    echo [FEHLER] Push fehlgeschlagen. Remote und Zugangsdaten pruefen.
+    echo [!] Push abgelehnt - Remote hat neue Commits.
+    set /p REBASE="    Automatisch pull + rebase + push? [j/n]: "
+    if /i "!REBASE!"=="j" (
+        git pull --rebase origin "!PB!"
+        if errorlevel 1 (
+            echo [FEHLER] Rebase fehlgeschlagen. Konflikte manuell loesen.
+        ) else (
+            git push --set-upstream origin "!PB!"
+            if errorlevel 1 (
+                echo [FEHLER] Push nach Rebase fehlgeschlagen.
+            ) else (
+                echo [OK] Push erfolgreich!
+            )
+        )
+    )
 ) else (
     echo [OK] Push erfolgreich!
 )
@@ -163,12 +177,17 @@ goto REFRESH
 :: --------------------------------------------------------
 :BRANCH
 echo.
-echo ---- Branches ---------------------------------------------
+echo ---- Branch / Remote --------------------------------------
 git branch -a
+echo.
+set CURREMOTE=kein remote
+for /f "delims=" %%r in ('git remote get-url origin 2^>nul') do set CURREMOTE=%%r
+echo   Remote: !CURREMOTE!
 echo.
 echo   1) Branch wechseln
 echo   2) Neuen Branch erstellen
-echo   3) Zurueck
+echo   3) Remote-URL aendern (anderes Repo verbinden)
+echo   4) Zurueck
 echo.
 set /p BACTION="Aktion: "
 
@@ -188,6 +207,26 @@ if "!BACTION!"=="2" (
         echo [FEHLER] Erstellen fehlgeschlagen.
     ) else (
         echo [OK] Branch erstellt: !BNAME!
+    )
+)
+if "!BACTION!"=="3" (
+    echo.
+    echo   Aktuelle URL: !CURREMOTE!
+    set /p NEWURL="   Neue Remote-URL: "
+    if "!NEWURL!"=="" (
+        echo [!] Keine URL eingegeben - Abbruch.
+    ) else (
+        git remote get-url origin >nul 2>&1
+        if errorlevel 1 (
+            git remote add origin "!NEWURL!"
+        ) else (
+            git remote set-url origin "!NEWURL!"
+        )
+        if errorlevel 1 (
+            echo [FEHLER] Remote konnte nicht gesetzt werden.
+        ) else (
+            echo [OK] Remote geaendert zu: !NEWURL!
+        )
     )
 )
 echo.
@@ -230,7 +269,21 @@ for /f "delims=" %%b in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set FSB=%%
 echo [**] Push zu origin/!FSB!...
 git push --set-upstream origin "!FSB!"
 if errorlevel 1 (
-    echo [FEHLER] Push fehlgeschlagen.
+    echo [!] Push abgelehnt - Remote hat neue Commits.
+    set /p FSREBASE="    Automatisch pull + rebase + push? [j/n]: "
+    if /i "!FSREBASE!"=="j" (
+        git pull --rebase origin "!FSB!"
+        if errorlevel 1 (
+            echo [FEHLER] Rebase fehlgeschlagen. Konflikte manuell loesen.
+        ) else (
+            git push --set-upstream origin "!FSB!"
+            if errorlevel 1 (
+                echo [FEHLER] Push nach Rebase fehlgeschlagen.
+            ) else (
+                echo [OK] Vollsync abgeschlossen!
+            )
+        )
+    )
 ) else (
     echo [OK] Vollsync abgeschlossen!
 )
